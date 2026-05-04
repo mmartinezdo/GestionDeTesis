@@ -1,0 +1,17 @@
+# Variables de entorno (¡MUY IMPORTANTE!)
+.env
+.env.local
+.env.production
+
+# Dependencias
+node_modules/
+
+# Next.js
+.next/
+out/
+
+# Logs
+*.log
+
+# Docker volumes locales
+postgres_data/

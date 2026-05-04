@@ -1,0 +1,266 @@
+// backend/prisma/schema.prisma
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Enums para estados
+enum Role {
+  ADMIN
+  COORDINADOR
+  ASESOR
+  ESTUDIANTE
+  EMPRESA_REP
+}
+
+enum EstadoPractica {
+  POSTULADO
+  ASIGNADO
+  EN_CURSO
+  FINALIZADO
+  RECHAZADO
+}
+
+enum EstadoTesis {
+  REGISTRADA
+  ASIGNADA
+  EN_DESARROLLO
+  SUSTENTADA
+  APROBADA
+  RECHAZADA
+}
+
+// Tabla de Usuarios (autenticación y rol)
+model User {
+  id            Int       @id @default(autoincrement())
+  email         String    @unique
+  password      String
+  nombres       String
+  apellidos     String
+  dni           String    @unique
+  rolId         Int?      @map("rol_id")
+  rol           RoleInfo? @relation(fields: [rolId], references: [id])
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  // Relaciones
+  estudiante    Estudiante?
+  asesor        Asesor?
+  representante EmpresaRepresentante?
+  coordinador   Coordinador?
+
+  @@map("usuarios")
+}
+
+// Nueva estructura de Roles y Permisos
+model RoleInfo {
+  id          Int       @id @default(autoincrement())
+  nombre      String    @unique // ADMIN, ESTUDIANTE, etc.
+  descripcion String?
+  createdAt   DateTime  @default(now()) @map("created_at")
+  
+  users       User[]
+  permisos    RolPermiso[]
+
+  @@map("roles")
+}
+
+model Permiso {
+  id          Int       @id @default(autoincrement())
+  nombre      String    @unique // p.ej. "practicas:crear"
+  descripcion String?
+  recurso     String    // p.ej. "practicas"
+  accion      String    // p.ej. "crear", "leer", "editar", "borrar"
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  roles       RolPermiso[]
+
+  @@map("permisos")
+}
+
+model RolPermiso {
+  rolId     Int     @map("rol_id")
+  permisoId Int     @map("permiso_id")
+  
+  rol       RoleInfo @relation(fields: [rolId], references: [id])
+  permiso   Permiso  @relation(fields: [permisoId], references: [id])
+
+  @@id([rolId, permisoId])
+  @@map("rol_permiso")
+}
+
+// Datos específicos de Estudiante
+model Estudiante {
+  id            Int       @id @default(autoincrement())
+  codigo        String    @unique // Código universitario
+  escuela       String
+  anioIngreso   Int
+  telefono      String?
+  direccion     String?
+  userId        Int       @unique
+  user          User      @relation(fields: [userId], references: [id])
+  
+  practicas     Practica[]
+  tesis         Tesis[]
+
+  @@map("estudiantes")
+}
+
+// Datos específicos de Asesor/Docente
+model Asesor {
+  id            Int       @id @default(autoincrement())
+  especialidad  String
+  departamento  String
+  userId        Int       @unique
+  user          User      @relation(fields: [userId], references: [id])
+  
+  practicasAsignadas Practica[] // Como asesor de práctica
+  tesisAsignadas      Tesis[]   // Como asesor de tesis
+  juradoTesis         Jurado[]  // Como miembro de jurado
+
+  @@map("asesores")
+}
+
+model Coordinador {
+  id            Int       @id @default(autoincrement())
+  facultad      String
+  userId        Int       @unique
+  user          User      @relation(fields: [userId], references: [id])
+
+  @@map("coordinadores")
+}
+
+model Empresa {
+  id            Int       @id @default(autoincrement())
+  ruc           String    @unique
+  razonSocial   String
+  direccion     String
+  telefono      String
+  emailContacto String
+  sector        String?
+  activo        Boolean   @default(true)
+  
+  convenios     Convenio[]
+  practicas     Practica[]
+  representantes EmpresaRepresentante[]
+
+  @@map("empresas")
+}
+
+model EmpresaRepresentante {
+  id            Int       @id @default(autoincrement())
+  cargo         String
+  telefono      String
+  userId        Int       @unique
+  user          User      @relation(fields: [userId], references: [id])
+  empresaId     Int
+  empresa       Empresa   @relation(fields: [empresaId], references: [id])
+
+  @@map("empresas_representantes")
+}
+
+model Convenio {
+  id            Int       @id @default(autoincrement())
+  codigo        String    @unique
+  fechaInicio   DateTime  @map("fecha_inicio")
+  fechaFin      DateTime  @map("fecha_fin")
+  documentoUrl  String?   @map("documento_url")
+  activo        Boolean   @default(true)
+  empresaId     Int
+  empresa       Empresa   @relation(fields: [empresaId], references: [id])
+  
+  @@map("convenios")
+}
+
+model Practica {
+  id            Int          @id @default(autoincrement())
+  titulo        String
+  descripcion   String
+  requisitos    String
+  horasRequeridas Int        @map("horas_requeridas")
+  fechaInicio   DateTime     @map("fecha_inicio")
+  fechaFin      DateTime     @map("fecha_fin")
+  estado        EstadoPractica @default(POSTULADO)
+  empresaId     Int
+  empresa       Empresa      @relation(fields: [empresaId], references: [id])
+  estudianteId  Int?
+  estudiante    Estudiante?  @relation(fields: [estudianteId], references: [id])
+  asesorId      Int?
+  asesor        Asesor?      @relation(fields: [asesorId], references: [id])
+  
+  createdAt     DateTime     @default(now()) @map("created_at")
+  updatedAt     DateTime     @updatedAt @map("updated_at")
+
+  informes      InformePractica[]
+
+  @@map("practicas")
+}
+
+model InformePractica {
+  id            Int       @id @default(autoincrement())
+  semana        Int
+  descripcion   String
+  horas         Int
+  fecha         DateTime  @default(now())
+  archivoUrl    String?   @map("archivo_url")
+  practicaId    Int
+  practica      Practica  @relation(fields: [practicaId], references: [id])
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  @@map("informes_practica")
+}
+
+model Tesis {
+  id            Int          @id @default(autoincrement())
+  titulo        String
+  resumen       String
+  fechaRegistro DateTime     @default(now()) @map("fecha_registro")
+  fechaSustentacion DateTime? @map("fecha_sustentacion")
+  estado        EstadoTesis  @default(REGISTRADA)
+  archivoUrl    String?      @map("archivo_url")
+  actaUrl       String?      @map("acta_url")
+  estudianteId  Int
+  estudiante    Estudiante   @relation(fields: [estudianteId], references: [id])
+  asesorId      Int?
+  asesor        Asesor?      @relation(fields: [asesorId], references: [id])
+  
+  createdAt     DateTime     @default(now()) @map("created_at")
+  updatedAt     DateTime     @updatedAt @map("updated_at")
+
+  avances       AvanceTesis[]
+  jurados       Jurado[]
+
+  @@map("tesis")
+}
+
+model AvanceTesis {
+  id            Int       @id @default(autoincrement())
+  descripcion   String
+  fechaEntrega  DateTime  @default(now()) @map("fecha_entrega")
+  archivoUrl    String?   @map("archivo_url")
+  observacion   String?
+  tesisId       Int
+  tesis         Tesis     @relation(fields: [tesisId], references: [id])
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  @@map("avances_tesis")
+}
+
+model Jurado {
+  id            Int       @id @default(autoincrement())
+  dictamen      String?   // Aprobado, Observado, Rechazado
+  observaciones String?
+  asesorId      Int
+  asesor        Asesor    @relation(fields: [asesorId], references: [id])
+  tesisId       Int
+  tesis         Tesis     @relation(fields: [tesisId], references: [id])
+
+  @@unique([asesorId, tesisId])
+  @@map("jurados")
+}

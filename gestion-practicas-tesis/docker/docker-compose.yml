@@ -1,0 +1,55 @@
+# docker/docker-compose.yml
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15
+    container_name: sistema_db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tu_contraseña_segura}
+      POSTGRES_DB: sistema_gestion
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - sistema_network
+
+  backend:
+    build:
+      context: ../
+      dockerfile: docker/Dockerfile.backend
+    container_name: sistema_backend
+    environment:
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-tu_contraseña_segura}@postgres:5432/sistema_gestion?schema=public
+      JWT_SECRET: ${JWT_SECRET:-tu_secreto_super_seguro_cambia_esto}
+      PORT: 4000
+    ports:
+      - "4000:4000"
+    depends_on:
+      - postgres
+    networks:
+      - sistema_network
+    command: sh -c "npx prisma migrate deploy && node dist/main"
+
+  frontend:
+    build:
+      context: ../
+      dockerfile: docker/Dockerfile.frontend
+    container_name: sistema_frontend
+    environment:
+      NEXT_PUBLIC_API_URL: http://backend:4000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    networks:
+      - sistema_network
+
+volumes:
+  postgres_data:
+
+networks:
+  sistema_network:
+    driver: bridge
